@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+DEFAULT_INPUT_PATH = Path("data/default_of_credit_card_clients.xls")
+DEFAULT_ENGINEERED_OUTPUT_PATH = Path("data/default_of_credit_card_clients_engineered.csv")
+DEFAULT_TARGET_COL = "default payment next month"
 
 CATEGORICAL_COLS = [
     "SEX",
@@ -73,6 +79,39 @@ def add_features(data):
     data["BILL_CHANGE_AVG"] = data[BILL_COLS].diff(axis=1).iloc[:, 1:].mean(axis=1)
 
     return data
+
+
+def read_credit_dataset(path=DEFAULT_INPUT_PATH, excel_header=1):
+    """Read the credit dataset from Excel or CSV."""
+    import pandas as pd
+
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix in {".xls", ".xlsx"}:
+        return pd.read_excel(path, header=excel_header)
+    if suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError(f"Unsupported dataset format: {path.suffix}")
+
+
+def save_engineered_dataset(
+    source_df=None,
+    input_path=DEFAULT_INPUT_PATH,
+    output_path=DEFAULT_ENGINEERED_OUTPUT_PATH,
+    excel_header=1,
+):
+    """Create and save the original dataset plus engineered features."""
+    output_path = Path(output_path)
+    data = (
+        read_credit_dataset(input_path, excel_header)
+        if source_df is None
+        else source_df
+    )
+    engineered_data = add_features(data)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    engineered_data.to_csv(output_path, index=False)
+    return engineered_data
 
 
 def make_one_hot_encoder():
@@ -159,3 +198,11 @@ def prepare_feature_sets(
             output_dtype=output_dtype,
         ),
     }
+
+
+if __name__ == "__main__":
+    engineered_df = save_engineered_dataset()
+    print(
+        f"Saved engineered dataset to {DEFAULT_ENGINEERED_OUTPUT_PATH} "
+        f"with shape {engineered_df.shape}"
+    )
