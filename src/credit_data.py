@@ -9,8 +9,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-DEFAULT_INPUT_PATH = Path("data/default_of_credit_card_clients.xls")
-DEFAULT_ENGINEERED_OUTPUT_PATH = Path("data/default_of_credit_card_clients_engineered.csv")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "data"
+DEFAULT_INPUT_PATH = DATA_DIR / "default_of_credit_card_clients.xls"
+DEFAULT_ENGINEERED_OUTPUT_PATH = DATA_DIR / "default_of_credit_card_clients_engineered.xlsx"
 DEFAULT_TARGET_COL = "default payment next month"
 
 CATEGORICAL_COLS = [
@@ -94,6 +96,55 @@ def read_credit_dataset(path=DEFAULT_INPUT_PATH, excel_header=1):
     raise ValueError(f"Unsupported dataset format: {path.suffix}")
 
 
+def excel_metadata_columns(columns, target_col=DEFAULT_TARGET_COL):
+    """Build the first metadata row used by the original credit Excel file."""
+    feature_idx = 1
+    metadata_cols = []
+    for column in columns:
+        if column == "ID":
+            metadata_cols.append("")
+        elif column == target_col:
+            metadata_cols.append("Y")
+        else:
+            metadata_cols.append(f"X{feature_idx}")
+            feature_idx += 1
+    return metadata_cols
+
+
+def order_like_credit_excel(data, target_col=DEFAULT_TARGET_COL):
+    """Keep ID first and move the target column to the end, as in the original file."""
+    if target_col not in data.columns:
+        return data
+    non_target_cols = [col for col in data.columns if col != target_col]
+    return data[[*non_target_cols, target_col]]
+
+
+def write_credit_dataset(data, path, target_col=DEFAULT_TARGET_COL):
+    """Write credit data to CSV or Excel with the original two-row Excel layout."""
+    import pandas as pd
+
+    path = Path(path)
+    suffix = path.suffix.lower()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if suffix == ".csv":
+        data.to_csv(path, index=False)
+        return path
+    if suffix == ".xlsx":
+        metadata = pd.DataFrame([excel_metadata_columns(data.columns, target_col)])
+        metadata.to_excel(path, index=False, header=False)
+        with pd.ExcelWriter(path, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
+            data.to_excel(writer, index=False, startrow=1)
+        return path
+    if suffix == ".xls":
+        raise ValueError(
+            "Writing legacy .xls files is not supported by the installed pandas "
+            "environment. Use .xlsx for the same Excel layout, or install a legacy "
+            ".xls writer and pass a custom output_path."
+        )
+    raise ValueError(f"Unsupported dataset format: {path.suffix}")
+
+
 def save_engineered_dataset(
     source_df=None,
     input_path=DEFAULT_INPUT_PATH,
@@ -107,10 +158,9 @@ def save_engineered_dataset(
         if source_df is None
         else source_df
     )
-    engineered_data = add_features(data)
+    engineered_data = order_like_credit_excel(add_features(data))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    engineered_data.to_csv(output_path, index=False)
+    write_credit_dataset(engineered_data, output_path)
     return engineered_data
 
 
