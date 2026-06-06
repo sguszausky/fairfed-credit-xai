@@ -219,3 +219,5 @@ __marimo__/
 
 #datset
 data/
+models/
+reports/
