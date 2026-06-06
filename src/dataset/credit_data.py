@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 DEFAULT_INPUT_PATH = DATA_DIR / "default_of_credit_card_clients.xls"
 DEFAULT_ENGINEERED_OUTPUT_PATH = DATA_DIR / "default_of_credit_card_clients_engineered.xlsx"

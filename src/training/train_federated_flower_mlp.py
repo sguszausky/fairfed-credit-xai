@@ -12,6 +12,11 @@ import argparse
 import json
 import warnings
 from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np
 import pandas as pd
@@ -37,13 +42,13 @@ except ImportError as exc:  # pragma: no cover - exercised only without Flower.
         '  pip install -U "flwr[simulation]"\n'
     ) from exc
 
-from credit_data import (
+from src.dataset.credit_data import (
     CATEGORICAL_COLS,
     DEFAULT_TARGET_COL,
     add_features,
     make_one_hot_encoder,
 )
-from credit_mlp import (
+from src.training.credit_mlp import (
     CreditDefaultMLP,
     DEFAULT_SEED,
     best_f1_threshold,
@@ -57,7 +62,6 @@ from credit_mlp import (
     set_seed,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CLIENT_DATA_DIR = REPO_ROOT / "data" / "IID_cl3_age_unbalanced"
 DEFAULT_MODELS_DIR = REPO_ROOT / "models"
 

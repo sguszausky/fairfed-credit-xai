@@ -140,6 +140,72 @@ class CreditDefaultMLP(nn.Module):
         return self.net(x)
 
 
+class StateDictCreditDefaultMLP(nn.Module):
+    """MLP wrapper reconstructed from a saved ``net.*`` state dict."""
+
+    def __init__(self, state_dict):
+        super().__init__()
+        self.net = build_net_from_state_dict(state_dict)
+
+    def forward(self, x):
+        return self.net(x)
+
+
+def build_net_from_state_dict(state_dict):
+    """Rebuild a Sequential MLP whose module indexes match a saved checkpoint."""
+    linear_indices = sorted(
+        int(key.split(".")[1])
+        for key, value in state_dict.items()
+        if key.startswith("net.") and key.endswith(".weight") and value.ndim == 2
+    )
+    if not linear_indices:
+        raise ValueError("No Linear layers found in model_state_dict.")
+
+    batch_norm_indices = {
+        int(key.split(".")[1])
+        for key in state_dict
+        if key.startswith("net.") and key.endswith(".running_mean")
+    }
+    modules = []
+    linear_position = 0
+    max_idx = linear_indices[-1]
+
+    for idx in range(max_idx + 1):
+        weight = state_dict.get(f"net.{idx}.weight")
+        bias = state_dict.get(f"net.{idx}.bias")
+        if weight is not None and getattr(weight, "ndim", None) == 2:
+            out_features, in_features = weight.shape
+            modules.append(nn.Linear(in_features, out_features, bias=bias is not None))
+            linear_position += 1
+        elif idx in batch_norm_indices:
+            modules.append(nn.BatchNorm1d(state_dict[f"net.{idx}.running_mean"].shape[0]))
+        elif linear_position < len(linear_indices):
+            modules.append(nn.ReLU() if idx % 2 == 0 else nn.Dropout(0.0))
+        else:
+            modules.append(nn.Identity())
+
+    return nn.Sequential(*modules)
+
+
+def build_mlp_from_artifact(artifact, strict=True):
+    """Build a CreditDefaultMLP from an artifact, falling back to checkpoint shape."""
+    config = normalize_mlp_config(artifact.get("model_config"))
+    state_dict = artifact["model_state_dict"]
+    try:
+        model = CreditDefaultMLP(
+            input_dim=artifact["input_dim"],
+            hidden_dims=config["hidden_dims"],
+            dropout=config["dropout"],
+            use_batch_norm=config["batch_norm"],
+        )
+        model.load_state_dict(state_dict, strict=strict)
+    except RuntimeError:
+        model = StateDictCreditDefaultMLP(state_dict)
+        model.load_state_dict(state_dict, strict=strict)
+    model.eval()
+    return model, config
+
+
 def make_dataset(X_array, y_series):
     X_tensor = torch.tensor(X_array, dtype=torch.float32)
     y_tensor = torch.tensor(y_series.to_numpy(), dtype=torch.float32).view(-1, 1)
